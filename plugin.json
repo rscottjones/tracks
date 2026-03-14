@@ -1,0 +1,6 @@
+{
+  "version": "1.0",
+  "title": "Tracks",
+  "description": "Display GPS tracks from GPX files on interactive maps. Supports stats, elevation profiles, waypoints, multi-track mode, and multiple basemaps.",
+  "fields": []
+}

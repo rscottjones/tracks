@@ -1,0 +1,1061 @@
+{{/*
+  Tracks for Micro.blog (Hugo Shortcode)
+  =======================================
+  Displays GPS tracks from GPX files on an interactive Leaflet map.
+  Companion to Maps for Micro.blog — shares basemap tile options and
+  a compatible waypoint data format.
+
+  Fully self-contained. No head partial, footer partial, or microhook
+  needed. Leaflet and leaflet-gpx load on demand, only once per page,
+  even with multiple track maps. Safe alongside the Maps plugin — both
+  share the same Leaflet loader queue.
+
+  ── Usage ──────────────────────────────────────────────────────────
+
+  Positional:
+    {{< track "w-trek-day1" >}}
+
+  Named (all optional params):
+    {{< track data="w-trek-day1" >}}
+    {{< track data="w-trek-day1" basemap="topo" height="600px" >}}
+    {{< track data="w-trek-day1" color="#E11D48" weight="5" >}}
+    {{< track data="w-trek-day1" stats="no" >}}
+    {{< track data="w-trek-day1" waypoints="w-trek-waypoints" >}}
+    {{< track data="w-trek-day1" simplify="yes" >}}
+    {{< track data="w-trek-day1" simplify="0.00003" >}}
+
+  ── Shortcode parameters ────────────────────────────────────────────
+
+    data / positional 0
+        Name of the YAML data file in data/ (required).
+
+    height
+        Map container height. Default: "500px".
+
+    color
+        In single-track mode: default line color (default: "#E11D48").
+        In multi-track mode: forces ALL tracks to this color, overriding
+        per-track color fields and the auto-palette. Omit to let each
+        track use its own color (or the palette fallback).
+
+    weight
+        Track line width in pixels. Default: "4".
+
+    basemap
+        Base map tile style. Default: "osm".
+
+        General purpose:
+          osm          OpenStreetMap — default, worldwide
+          voyager      Carto Voyager — clean, colourful
+          positron     Carto Positron — minimal, lets track colors pop
+
+        Outdoor & terrain:
+          topo         OpenTopoMap — contours, worldwide
+          cycle        CyclOSM — bike lanes, surface types, worldwide
+          usgs-topo    USGS Topo — detailed quads, US only
+          usgs-hybrid  USGS Imagery + Topo overlay, US only
+
+
+        Satellite & imagery:
+          satellite    Esri World Imagery
+          streets      Esri World Street Map — urban detail
+          esri-topo    Esri World Topo
+          esri-relief  Esri Shaded Relief — clean hillshade, no clutter
+          natgeo       National Geographic style
+
+        Activity tips:
+          Hiking:        topo, esri-topo, usgs-topo
+          Cycling:       cycle, topo
+          Running:       voyager, streets, osm
+          Off-road:      satellite, usgs-hybrid, esri-relief
+          Paddling:      topo, satellite, osm
+          Scenic driving:natgeo, esri-relief, voyager
+          Skiing:        topo
+
+    stats
+        Show the stats bar below the map. Overrides the stats field
+        in the data file if provided. Default: "yes".
+        Has no effect in multi-track mode (stats bar is never shown).
+
+    waypoints
+        Name of a waypoint YAML file in data/ (optional).
+        Overrides the waypoints field in the data file if provided.
+        Single-track mode only.
+
+    markers
+        Show start and finish markers at the endpoints of each track.
+        Uses the built-in start/finish icons in the track's line color.
+        Set to "no" for reference tracks (e.g. a park boundary) where
+        endpoints are meaningless. Overrides the markers field in the
+        data file if provided. Default: "yes".
+
+    legend
+        Show a legend bar below the map identifying each track by color
+        swatch and name. Multi-track mode only; ignored for single tracks.
+        Set to "yes" to enable. Default: "no".
+        Each track entry can include an optional legend_url field to make
+        its legend label a clickable link.
+
+    units
+        Unit system for distance and elevation. Default: "metric".
+          metric   — kilometers and meters
+          imperial — miles and feet
+
+    elevation
+        Show an SVG elevation profile chart below the stats bar (or
+        below the map if stats is off). Single-track mode only.
+        Overrides the elevation field in the data file if provided.
+        Only meaningful if the GPX file contains elevation data.
+        Default: "no".
+
+    simplify
+        Reduce GPX point density for faster rendering. Use "yes" for
+        a sensible default tolerance, or a numeric value in degrees for
+        manual control (e.g. "0.00005"). Recommended for tracks longer
+        than ~20 km, large GPX files, or multi-track maps.
+        Default: "no" (no simplification — faithful to source data).
+
+  ── Single-track data file (data/tracks/w-trek-day1.yml) ───────────
+
+    gpx: "/uploads/2025/w-trek-day1.gpx"   # required
+    name: "W Trek — Day 1"                  # shown in stats bar and popup
+    url: "/2025/05/w-trek-day1"             # makes the track line clickable
+    note: "Grey Glacier to Paine."         # shown in stats bar and popup
+    color: "#E11D48"                        # overrides shortcode color param
+    weight: 4                               # overrides shortcode weight param
+    basemap: "topo"                         # overrides shortcode basemap param — see full list in docs
+    stats: yes                             # overrides shortcode stats param
+    markers: yes                           # overrides shortcode markers param
+    elevation: no                          # overrides shortcode elevation param
+    simplify: no                           # overrides shortcode simplify param
+    units: "metric"                         # overrides shortcode units param — "metric" or "imperial"
+
+    waypoints: "w-trek-waypoints"           # optional — references data/tracks/w-trek-waypoints.yml
+
+  ── Multi-track data file (data/tracks/patagonia-hikes.yml) ────────
+
+    - name: "W Trek — Day 1"
+      gpx: "/uploads/2025/w-trek-day1.gpx"
+      color: "#E11D48"
+      url: "/2025/05/w-trek-day1"
+      legend_url: "/2025/05/w-trek-day1"        # optional — makes the legend label a link
+      note: "Grey Glacier to Paine Grande. 11 km, 340 m gain."
+
+    - name: "W Trek — Day 2"
+      gpx: "/uploads/2025/w-trek-day2.gpx"
+      color: "#7C3AED"
+      url: "/2025/05/w-trek-day2"
+      note: "Paine Grande to Italiano. 9 km, 180 m gain."
+
+    - name: "Reference: park boundary"
+      gpx: "/uploads/2025/park-boundary.gpx"
+      color: "#94a3b8"
+      popup: no                           # no popup — purely visual
+      markers: no                         # no start/finish markers — purely visual
+
+  Notes on multi-track mode:
+    - Stats bar is never shown; put condensed stats in note fields.
+    - Waypoints are not supported per-track (single-track only).
+    - Each track should define its own color; if omitted a built-in
+      palette cycles through distinct colors automatically.
+    - Passing color= in the shortcode forces ALL tracks to that color.
+    - The plugin detects the format automatically: a top-level YAML list
+      triggers multi-track mode; a top-level map triggers single-track.
+
+  ── Waypoint data file (data/tracks/w-trek-waypoints.yml) ──────────
+
+    - name: "Refugio Grey"
+      lat: -50.9876
+      lon: -73.1234
+      icon: "⛺"
+      color: "SteelBlue"
+      url: "/2025/05/refugio-grey"
+      note: "Night 1. Book 6+ months ahead."
+
+    - name: "Grey Glacier viewpoint"
+      lat: -50.9912
+      lon: -73.1456
+      icon: "pin"
+      note: "Best views before noon."
+
+  Waypoint url behaviour is determined by file extension:
+    Image (.jpg, .png, .gif, .webp) — opens in the shared lightbox gallery.
+    Video (.mp4, .m4v, .mov, .webm, .ogv, .m3u8) — opens in a standalone
+      video player overlay. HLS streams (.m3u8) use hls.js on non-Safari
+      browsers, loaded on demand.
+    Audio (.mp3, .m4a, .aac, .ogg, .oga, .wav, .flac) — embeds an inline
+      audio player directly in the waypoint popup.
+    Anything else — opens as a normal link in a new tab.
+
+  Available waypoint icons:
+    Generic:  pin, pin-small, star, heart, point, disc, bullseye,
+              flag-checkered, camera, video, image, gallery,
+              mountain, binoculars, landmark, utensils,
+              droplet, microphone, triangle-exclamation
+    Circles:  circle-heart, circle-star,
+              circle-camera, circle-video, circle-image, circle-gallery
+    Numbered: circle-0 through circle-9, circle-00 through circle-99
+    Emoji:    any other value rendered as-is (e.g. "⛺", "📸", "⚠️")
+
+  ── GPX files ───────────────────────────────────────────────────────
+
+    Upload via Uploads in the Micro.blog navigation, then copy the URL
+    to use in your data file.
+    The GPX must be hosted on the same domain as your blog (no CORS).
+    GPX export is available in Strava, Garmin Connect, AllTrails,
+    Komoot, Apple Fitness, and most other fitness/mapping apps.
+
+  ── On simplification ───────────────────────────────────────────────
+
+    GPX files record a point every 1–5 seconds; a long hike can contain
+    10,000+ coordinates. Simplification uses the Ramer-Douglas-Peucker
+    algorithm on lat/lng coordinates to discard points that fall within
+    a tolerance distance of the straight line between their neighbours,
+    preserving corners and direction changes. This reduces point count
+    by 60–80% with no visible difference at typical map zoom levels.
+
+    The tolerance is expressed in degrees. Useful reference values:
+      0.00003  ≈  3 m   — very fine; good for tight switchbacks
+      0.00005  ≈  5 m   — default when simplify="yes"
+      0.0001   ≈ 11 m   — aggressive; best for very large files
+    Simplification runs after the GPX loads; the source file is unchanged.
+*/}}
+
+{{/* ── Resolve source name ── */}}
+{{ $source := "" }}
+{{ if .IsNamedParams }}
+  {{ with .Get "data" }}{{ $source = . }}{{ end }}
+{{ else }}
+  {{ with .Get 0 }}{{ $source = . }}{{ end }}
+{{ end }}
+
+{{/* ── Shortcode parameters ── */}}
+{{ $height         := "500px" }}
+{{ $defaultColor   := "#E11D48" }}
+{{ $forceColor     := "" }}{{/* non-empty only when color= was explicitly passed */}}
+{{ $defaultWeight  := "4" }}
+{{ $defaultBasemap := "osm" }}
+{{ $statsParam     := "" }}
+{{ $waypointsParam := "" }}
+{{ $simplifyParam  := "" }}
+{{ $markersParam   := "" }}
+{{ $elevationParam := "" }}
+{{ $legendParam    := "" }}
+{{ $unitsParam     := "" }}
+{{ $basemapParam   := "" }}
+{{ $weightParam    := "" }}
+{{ if .IsNamedParams }}
+  {{ with .Get "height"    }}{{ $height         = . }}{{ end }}
+  {{ with .Get "color"     }}{{ $forceColor      = . }}{{ $defaultColor = . }}{{ end }}
+  {{ with .Get "weight"    }}{{ $defaultWeight  = . }}{{ $weightParam  = . }}{{ end }}
+  {{ with .Get "basemap"   }}{{ $defaultBasemap = . }}{{ $basemapParam = . }}{{ end }}
+  {{ with .Get "stats"     }}{{ $statsParam     = . }}{{ end }}
+  {{ with .Get "waypoints" }}{{ $waypointsParam = . }}{{ end }}
+  {{ with .Get "simplify"  }}{{ $simplifyParam  = . }}{{ end }}
+  {{ with .Get "markers"   }}{{ $markersParam   = . }}{{ end }}
+  {{ with .Get "elevation" }}{{ $elevationParam = . }}{{ end }}
+  {{ with .Get "legend"    }}{{ $legendParam    = . }}{{ end }}
+  {{ with .Get "units"     }}{{ $unitsParam     = . }}{{ end }}
+{{ end }}
+{{ if findRE `^\d+$` $height }}{{ $height = printf "%spx" $height }}{{ end }}
+
+{{/* ── Unique IDs ── */}}
+{{ if not (.Page.Scratch.Get "trackCount") }}{{ .Page.Scratch.Set "trackCount" 0 }}{{ end }}
+{{ $trackN := .Page.Scratch.Get "trackCount" }}
+{{ .Page.Scratch.Set "trackCount" (add $trackN 1) }}
+{{ $mapID   := printf "track-%s-%d" $source $trackN }}
+{{ $statsID := printf "track-stats-%s-%d" $source $trackN }}
+
+{{/* ── Load data ── */}}
+{{ $data := index .Site.Data "tracks" $source }}
+
+{{ if $data }}
+
+{{/* ── Detect single vs multi-track ── */}}
+{{/* Detect single vs multi-track by checking whether $data is a map.
+     isset crashes in Hugo 0.91 when called on a slice, so we guard with
+     kindIs first. Single-track files are maps with a "gpx" key; multi-track
+     files are YAML lists and will be slices. */}}
+{{ $isMulti := true }}
+{{ if kindIs "map" $data }}
+  {{ if isset $data "gpx" }}{{ $isMulti = false }}{{ end }}
+{{ end }}
+
+{{/* ── Resolve single-track fields ── */}}
+{{ $gpxURL         := "" }}
+{{ $trackName      := "" }}
+{{ $trackDesc      := "" }}
+{{ $trackURL       := "" }}
+{{ $trackColor     := $defaultColor }}
+{{ $trackWeight    := $defaultWeight }}
+{{ $trackBasemap   := $defaultBasemap }}
+{{ $showStats      := true }}
+{{ $showMarkers    := true }}
+{{ $showElevation  := false }}
+{{ $waypointSource := "" }}
+{{ $simplifyVal    := "" }}{{/* resolved simplify: "no", "yes", or numeric string */}}
+
+{{ if not $isMulti }}
+  {{ with $data.gpx         }}{{ $gpxURL       = . }}{{ end }}
+  {{ with $data.name        }}{{ $trackName    = . }}{{ end }}
+  {{ with $data.note }}{{ $trackDesc    = . }}{{ end }}
+  {{ with $data.url         }}{{ $trackURL     = . }}{{ end }}
+  {{ with $data.color       }}{{ $trackColor   = . }}{{ end }}
+  {{ with $data.weight      }}{{ $trackWeight  = printf "%v" . }}{{ end }}
+  {{ with $data.basemap     }}{{ $trackBasemap = . }}{{ end }}
+
+  {{/* Shortcode params win over data file for basemap and weight */}}
+  {{ if $basemapParam }}{{ $trackBasemap = $basemapParam }}{{ end }}
+  {{ if $weightParam  }}{{ $trackWeight  = $weightParam  }}{{ end }}
+
+  {{/* If color was force-set by shortcode param it wins over data file */}}
+  {{ if $forceColor }}{{ $trackColor = $forceColor }}{{ end }}
+
+  {{/* Stats: shortcode param > YAML field > default true */}}
+  {{ if eq $statsParam "no" }}
+    {{ $showStats = false }}
+  {{ else if eq $statsParam "yes" }}
+    {{ $showStats = true }}
+  {{ else if isset $data "stats" }}
+    {{ if not $data.stats }}{{ $showStats = false }}{{ end }}
+  {{ end }}
+
+  {{/* Markers: shortcode param > YAML field > default true */}}
+  {{ if eq $markersParam "no" }}
+    {{ $showMarkers = false }}
+  {{ else if eq $markersParam "yes" }}
+    {{ $showMarkers = true }}
+  {{ else if isset $data "markers" }}
+    {{ if not $data.markers }}{{ $showMarkers = false }}{{ end }}
+  {{ end }}
+
+  {{/* Elevation: shortcode param > YAML field > default false */}}
+  {{ if eq $elevationParam "yes" }}
+    {{ $showElevation = true }}
+  {{ else if eq $elevationParam "no" }}
+    {{ $showElevation = false }}
+  {{ else if isset $data "elevation" }}
+    {{ if $data.elevation }}{{ $showElevation = true }}{{ end }}
+  {{ end }}
+
+  {{/* Waypoints: shortcode param > YAML field */}}
+  {{ if $waypointsParam }}
+    {{ $waypointSource = $waypointsParam }}
+  {{ else }}
+    {{ with $data.waypoints }}{{ $waypointSource = . }}{{ end }}
+  {{ end }}
+
+  {{/* Simplify: shortcode param > YAML field > default no
+       Numeric shortcode value passes through as-is.
+       YAML yes becomes the default tolerance; YAML numeric becomes that value. */}}
+  {{ if $simplifyParam }}
+    {{ $simplifyVal = $simplifyParam }}
+  {{ else if isset $data "simplify" }}
+    {{ if eq $data.simplify true }}
+      {{ $simplifyVal = "yes" }}
+    {{ else if eq $data.simplify false }}
+      {{ $simplifyVal = "no" }}
+    {{ else }}
+      {{ $simplifyVal = printf "%v" $data.simplify }}
+    {{ end }}
+  {{ else }}
+    {{ $simplifyVal = "no" }}
+  {{ end }}
+{{ else }}
+  {{/* Multi-track: simplify and units resolved from shortcode param only */}}
+  {{ if $simplifyParam }}
+    {{ $simplifyVal = $simplifyParam }}
+  {{ else }}
+    {{ $simplifyVal = "no" }}
+  {{ end }}
+{{ end }}
+
+{{/* ── Resolve imperial flag (available in both modes) ── */}}
+{{ $imperial := false }}
+{{ if eq $unitsParam "imperial" }}
+  {{ $imperial = true }}
+{{ else if not $isMulti }}
+  {{ if eq (printf "%v" $data.units) "imperial" }}{{ $imperial = true }}{{ end }}
+{{ end }}
+
+{{/* ── Load waypoints (single-track only) ── */}}
+{{ $waypoints := slice }}
+{{ if and (not $isMulti) $waypointSource }}
+  {{ $wp := index .Site.Data "tracks" $waypointSource }}
+  {{ if $wp }}{{ $waypoints = $wp }}{{ end }}
+{{ end }}
+
+{{ if $isMulti }}{{ $trackBasemap = $defaultBasemap }}{{ end }}
+
+{{/* ── Resolve legend (multi-track only) ── */}}
+{{ $showLegend := false }}
+{{ if and $isMulti (eq $legendParam "yes") }}{{ $showLegend = true }}{{ end }}
+
+{{/* ── Lightbox CSS (once per page — shared scratch key with Maps plugin) ── */}}
+{{ if not (.Page.Scratch.Get "lightboxCSS") }}
+  {{ .Page.Scratch.Set "lightboxCSS" true }}
+  {{ .Page.Scratch.Set "videoPlayerCSS" true }}
+  {{ partialCached "track-media-styles.html" . }}
+{{ end }}
+
+{{/* ── Video player + audio CSS (once per page — shared with Maps plugin) ── */}}
+{{ if not (.Page.Scratch.Get "videoPlayerCSS") }}
+  {{ .Page.Scratch.Set "videoPlayerCSS" true }}
+  {{ partialCached "track-video-styles.html" . }}
+{{ end }}
+
+{{/* ── Track CSS (once per page) ── */}}
+{{ if not (.Page.Scratch.Get "trackCSS") }}
+  {{ .Page.Scratch.Set "trackCSS" true }}
+  {{ partialCached "track-styles.html" . }}
+{{ end }}
+
+{{/* ── Shared JS: basemaps + icon shapes + media helpers (once per page) ── */}}
+{{ if not (.Page.Scratch.Get "trackJS") }}
+  {{ .Page.Scratch.Set "trackJS" true }}
+  {{ partialCached "track-shapes.html" . }}
+  {{ partialCached "track-media-helpers.html" . }}
+{{ end }}
+
+{{/* ── HTML: map container + optional stats bar + optional elevation chart + optional legend ── */}}
+{{ $hasStatsBar   := and (not $isMulti) $showStats }}
+{{ $hasElevation  := and (not $isMulti) $showElevation }}
+{{ $hasLegend     := and $isMulti $showLegend }}
+{{ $elevID        := printf "track-elev-%s-%d" $source $trackN }}
+{{ $legendID      := printf "track-legend-%s-%d" $source $trackN }}
+{{/* Map top is always rounded; bottom rounds only if nothing follows */}}
+{{ $mapBottomRadius := "12px" }}
+{{ if or $hasStatsBar $hasElevation $hasLegend }}{{ $mapBottomRadius = "0" }}{{ end }}
+<p class="track-visually-hidden">[Interactive track map — visit the original post to explore it.]</p>
+<div id="{{ $mapID }}" style="width:100%; height:{{ $height }} !important; border-radius:12px 12px {{ $mapBottomRadius }} {{ $mapBottomRadius }}; margin:30px 0 0; position:relative; z-index:0;">
+  <noscript><div style="display:flex;align-items:center;justify-content:center;height:100%;background:#f0f0f0;border-radius:inherit;font-family:sans-serif;font-size:14px;color:#666;padding:20px;text-align:center;">This interactive track map requires JavaScript to display.</div></noscript>
+</div>
+{{ if $hasStatsBar }}
+<div id="{{ $statsID }}" class="track-stats-bar{{ if $hasElevation }} track-has-elevation{{ end }}" style="{{ if not $hasElevation }}border-radius:0 0 12px 12px;{{ else }}border-radius:0;{{ end }}"><span class="track-stats-loading">Loading track&hellip;</span></div>
+{{ end }}
+{{ if $hasElevation }}<div id="{{ $elevID }}" class="track-elevation"></div>{{ end }}
+{{ if $hasLegend }}<div id="{{ $legendID }}" class="track-legend"></div>{{ end }}
+
+{{/* ── Per-map initialisation script ── */}}
+<script>
+(function() {
+
+  var MAP_ID         = {{ $mapID   | jsonify | safeJS }};
+  var STATS_ID       = {{ $statsID | jsonify | safeJS }};
+  var IS_MULTI       = {{ if $isMulti }}true{{ else }}false{{ end }};
+  var SHOW_STATS     = {{ if $hasStatsBar }}true{{ else }}false{{ end }};
+  var SHOW_MARKERS   = {{ if $showMarkers }}true{{ else }}false{{ end }};
+  var SHOW_ELEVATION = {{ if $hasElevation }}true{{ else }}false{{ end }};
+  var SHOW_LEGEND    = {{ if $hasLegend }}true{{ else }}false{{ end }};
+  var IMPERIAL       = {{ if $imperial }}true{{ else }}false{{ end }};
+  var ELEV_ID        = {{ $elevID   | jsonify | safeJS }};
+  var LEGEND_ID      = {{ $legendID | jsonify | safeJS }};
+  var BASEMAP        = {{ $trackBasemap | jsonify | safeJS }};
+  var DEFAULT_COLOR  = {{ $defaultColor | jsonify | safeJS }};
+  var FORCE_COLOR    = {{ $forceColor   | jsonify | safeJS }};
+  var DEFAULT_WEIGHT = parseFloat({{ $defaultWeight | jsonify | safeJS }}) || 4;
+
+  /* Resolve simplify tolerance: no → 0 (off), yes → default, numeric string → parsed value */
+  var SIMPLIFY_TOLERANCE = (function() {
+    var raw = {{ $simplifyVal | jsonify | safeJS }};
+    if (!raw || raw === 'no') return 0;
+    if (raw === 'yes')        return 0.00005;
+    var n = parseFloat(raw);
+    return isNaN(n) ? 0 : n;
+  })();
+
+  /* Single-track config */
+  var singleTrack = {
+    gpx:         {{ $gpxURL     | jsonify | safeJS }},
+    name:        {{ $trackName  | jsonify | safeJS }},
+    note: {{ $trackDesc  | jsonify | safeJS }},
+    url:         {{ $trackURL   | jsonify | safeJS }},
+    color:       {{ $trackColor | jsonify | safeJS }},
+    weight:      parseFloat({{ $trackWeight | jsonify | safeJS }}) || 4
+  };
+
+  /* Multi-track config */
+  var multiTracks = [
+    {{ if $isMulti }}{{ range $i, $r := $data }}
+    {
+      name:        {{ with $r.name        }}{{ . | jsonify | safeJS }}{{ else }}""{{ end }},
+      gpx:         {{ with $r.gpx         }}{{ . | jsonify | safeJS }}{{ else }}""{{ end }},
+      color:       {{ with $r.color       }}{{ . | jsonify | safeJS }}{{ else }}""{{ end }},
+      url:         {{ with $r.url         }}{{ . | jsonify | safeJS }}{{ else }}""{{ end }},
+      legend_url:  {{ with $r.legend_url  }}{{ . | jsonify | safeJS }}{{ else }}""{{ end }},
+      note: {{ with $r.note }}{{ . | jsonify | safeJS }}{{ else }}""{{ end }},
+      weight:      {{ with $r.weight }}{{ . }}{{ else }}0{{ end }},
+      popup:       {{ if isset $r "popup" }}{{ if $r.popup }}true{{ else }}false{{ end }}{{ else }}true{{ end }},
+      markers:     {{ if isset $r "markers" }}{{ if $r.markers }}true{{ else }}false{{ end }}{{ else }}true{{ end }},
+      paletteIdx:  {{ $i }}
+    },
+    {{ end }}{{ end }}
+  ];
+
+  /* Waypoints (single-track only) */
+  var waypoints = [
+    {{ range $waypoints }}
+    {
+      name:        {{ .name        | jsonify | safeJS }},
+      lat:         {{ .lat }},
+      lon:         {{ .lon }},
+      icon:        {{ with .icon        }}{{ . | jsonify | safeJS }}{{ else }}"pin"{{ end }},
+      color:       {{ with .color       }}{{ . | jsonify | safeJS }}{{ else }}""{{ end }},
+      url:         {{ with .url         }}{{ . | jsonify | safeJS }}{{ else }}""{{ end }},
+      note: {{ with .note }}{{ . | jsonify | safeJS }}{{ else }}""{{ end }}
+    },
+    {{ end }}
+  ];
+
+  /* ── Helpers ── */
+
+  function formatDistance(m) {
+    if (!m || m <= 0) return null;
+    if (IMPERIAL) {
+      var miles = m / 1609.344;
+      return miles >= 0.1 ? miles.toFixed(1) + '\u00a0mi' : Math.round(m * 3.28084) + '\u00a0ft';
+    }
+    return m >= 1000 ? (m / 1000).toFixed(1) + '\u00a0km' : Math.round(m) + '\u00a0m';
+  }
+  function formatElev(m) {
+    if (!m || m <= 0) return null;
+    if (IMPERIAL) return Math.round(m * 3.28084) + '\u00a0ft';
+    return Math.round(m) + '\u00a0m';
+  }
+  function formatDuration(ms) {
+    if (!ms || ms <= 0) return null;
+    var totalMin = Math.round(ms / 60000);
+    if (totalMin < 1) return null;
+    var h = Math.floor(totalMin / 60), m = totalMin % 60;
+    return h > 0 ? (h + 'h' + (m > 0 ? '\u00a0' + m + 'min' : '')) : (m + '\u00a0min');
+  }
+
+  /*
+   * Resolve final color for a track in multi-track mode.
+   * FORCE_COLOR (from shortcode color= param) always wins.
+   * Falls back to per-track color, then auto-palette.
+   */
+  function resolveColor(trackColor, paletteIdx) {
+    if (FORCE_COLOR)  return FORCE_COLOR;
+    if (trackColor)   return trackColor;
+    var p = window.__trackPalette;
+    return p[paletteIdx % p.length];
+  }
+
+  /* Apply RDP simplification to all polyline layers in a GPX layer group */
+  function simplifyGpxLayer(gpxLayer, tolerance) {
+    if (!tolerance) return;
+    gpxLayer.getLayers().forEach(function(layer) {
+      if (!layer.getLatLngs) return;
+      var latlngs = layer.getLatLngs();
+      /* Handle both flat arrays and arrays-of-arrays (multi-segment tracks) */
+      if (latlngs.length && Array.isArray(latlngs[0])) {
+        layer.setLatLngs(latlngs.map(function(seg) {
+          return window.__rdpSimplify(seg, tolerance);
+        }));
+      } else {
+        layer.setLatLngs(window.__rdpSimplify(latlngs, tolerance));
+      }
+    });
+  }
+
+  /* Build popup HTML for a track line */
+  function trackPopupHTML(name, note, url) {
+    var nameHTML = (name && url)
+      ? '<h3 style="margin:0;font-size:15px;"><a href="' + url + '" target="_blank" rel="noopener" style="color:#007bff;">' + name + '</a></h3>'
+      : (name ? '<h3 style="margin:0;font-size:15px;">' + name + '</h3>' : '');
+    return '<div style="font-family:sans-serif;padding:4px 2px;">'
+      + nameHTML
+      + (note ? '<p class="track-popup-note" style="margin:5px 0 0;font-size:13px;">' + note + '</p>' : '')
+      + '</div>';
+  }
+
+  /* Populate the stats bar after a single-track GPX loads */
+  function populateStats(gpxLayer) {
+    if (!SHOW_STATS) return;
+    var el = document.getElementById(STATS_ID);
+    if (!el) return;
+    var dist = formatDistance(gpxLayer.get_distance       ? gpxLayer.get_distance()       : 0);
+    var gain = formatElev    (gpxLayer.get_elevation_gain  ? gpxLayer.get_elevation_gain()  : 0);
+    var loss = formatElev    (gpxLayer.get_elevation_loss  ? gpxLayer.get_elevation_loss()  : 0);
+    var time = formatDuration(gpxLayer.get_moving_time     ? gpxLayer.get_moving_time()     : 0);
+    var sep  = ' <span class="track-stat-sep">\u25c6</span> ';
+    var parts = [];
+    if (singleTrack.name)        parts.push('<span class="track-stats-name">'       + singleTrack.name        + '</span>');
+    if (dist)                    parts.push('<span class="track-stat">\u2194\u00a0' + dist                    + '</span>');
+    if (gain)                    parts.push('<span class="track-stat">\u2191\u00a0' + gain                    + '</span>');
+    if (loss)                    parts.push('<span class="track-stat">\u2193\u00a0' + loss                    + '</span>');
+    if (time)                    parts.push('<span class="track-stat">'             + time                    + '</span>');
+    if (singleTrack.note) parts.push('<span class="track-stats-desc">'       + singleTrack.note + '</span>');
+    el.innerHTML = parts.length ? parts.join(sep) : '<span class="track-stats-desc">Track loaded.</span>';
+  }
+
+  function statsError(msg) {
+    if (!SHOW_STATS) return;
+    var el = document.getElementById(STATS_ID);
+    if (el) el.innerHTML = '<span class="track-stats-error">' + msg + '</span>';
+  }
+
+  /* Create a Leaflet icon from __trackShapes */
+  var iconCache = {};
+  function createIcon(shape, color) {
+    var key = shape + '|' + color;
+    if (iconCache[key]) return iconCache[key];
+    var def = window.__trackShapes[shape];
+    var icon;
+    if (def) {
+      var opts = {
+        iconUrl:    'data:image/svg+xml;base64,' + btoa(def.svg(color)),
+        iconSize:   [def.w, def.h],
+        iconAnchor: def.anchor,
+        popupAnchor:def.popup
+      };
+      if (def.shadow) {
+        opts.shadowUrl    = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
+        opts.shadowSize   = [41, 41];
+        opts.shadowAnchor = [12, 41];
+      }
+      icon = L.icon(opts);
+    } else if (/^fa-/.test(shape)) {
+      loadFontAwesome();
+      icon = L.divIcon({
+        html:        '<i class="fa-solid ' + shape + '" style="font-size:20px;color:' + color + ';"></i>',
+        className:   '',
+        iconSize:    [28, 28],
+        iconAnchor:  [14, 14],
+        popupAnchor: [0, -18]
+      });
+    } else {
+      icon = L.divIcon({
+        html:       '<span style="font-size:22px;line-height:1;">' + shape + '</span>',
+        className:  '',
+        iconSize:   [26, 26],
+        iconAnchor: [13, 13],
+        popupAnchor:[0, -18]
+      });
+    }
+    iconCache[key] = icon;
+    return icon;
+  }
+
+  /* Place start and finish markers at GPX track endpoints.
+     If the track is a loop (start ≈ end within ~30 m), only the start
+     marker is placed to avoid two icons stacked on the same point.
+     get_start/end_latlng() may return null when startIconUrl is null in
+     some leaflet-gpx versions; fall back to reading the polyline directly. */
+  function placeEndpointMarkers(gpxLayer, color, map) {
+    /* Always read start/end directly from the polyline layers — more reliable
+       than get_start/end_latlng() which can return null or waypoint coords
+       depending on the leaflet-gpx version and GPX file structure. */
+    var startLL = null, endLL = null;
+    var layers = gpxLayer.getLayers ? gpxLayer.getLayers() : [];
+    for (var i = 0; i < layers.length; i++) {
+      if (!layers[i].getLatLngs) continue;
+      var pts = layers[i].getLatLngs();
+      if (pts.length && Array.isArray(pts[0])) {
+        pts = pts.reduce(function(a, b) { return a.concat(b); }, []);
+      }
+      if (pts.length) {
+        if (!startLL) startLL = pts[0];
+        endLL = pts[pts.length - 1];
+      }
+    }
+    if (!startLL) return;
+
+    L.marker(startLL, { icon: createIcon('start',  color), zIndexOffset: 100 }).addTo(map);
+    if (endLL) {
+      L.marker(endLL,   { icon: createIcon('finish', color), zIndexOffset: 100 }).addTo(map);
+    }
+  }
+
+  /*
+   * Draw an SVG elevation profile from leaflet-gpx elevation data.
+   * elevData: array of [distance_m, elevation_m, lat, lng] from get_elevation_data()
+   * color: track line color used for the filled area
+   */
+  function drawElevationProfile(elevData, color) {
+    if (!SHOW_ELEVATION) return;
+    var el = document.getElementById(ELEV_ID);
+    if (!el || !elevData || elevData.length < 2) return;
+
+    /* ── Layout constants ── */
+    var W     = 1000;  /* SVG viewBox width (arbitrary unit) */
+    var H     = 120;   /* SVG viewBox height */
+    var PAD_L = 52;    /* left padding for Y-axis labels */
+    var PAD_R = 12;
+    var PAD_T = 10;
+    var PAD_B = 22;    /* bottom padding for X-axis labels */
+    var CW    = W - PAD_L - PAD_R;
+    var CH    = H - PAD_T - PAD_B;
+
+    /* ── Extract and validate data (distances stay in metres; elevations convert if imperial) ── */
+    var rawPts = elevData.filter(function(p) {
+      return p && p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1]);
+    });
+    if (rawPts.length < 2) return;
+
+    var elevUnit = IMPERIAL ? '\u00a0ft' : '\u00a0m';
+    var pts = IMPERIAL
+      ? rawPts.map(function(p) { return [p[0], p[1] * 3.28084]; })
+      : rawPts;
+
+    var distMax  = rawPts[rawPts.length - 1][0];
+    var elevMin  = Infinity, elevMax = -Infinity;
+    pts.forEach(function(p) {
+      if (p[1] < elevMin) elevMin = p[1];
+      if (p[1] > elevMax) elevMax = p[1];
+    });
+
+    /* Add a small vertical margin so the peak doesn't touch the top edge */
+    var elevRange = elevMax - elevMin || 1;
+    var elevPad   = elevRange * 0.08;
+    var yMin      = elevMin - elevPad;
+    var yMax      = elevMax + elevPad;
+    var yRange    = yMax - yMin;
+
+    /* ── Coordinate mappers ── */
+    function xPx(dist) { return PAD_L + (dist / distMax) * CW; }
+    function yPx(elev) { return PAD_T + CH - ((elev - yMin) / yRange) * CH; }
+
+    /* ── Build the filled area path ── */
+    var pathParts = ['M', xPx(pts[0][0]), yPx(pts[0][1])];
+    for (var i = 1; i < pts.length; i++) {
+      pathParts.push('L', xPx(pts[i][0]), yPx(pts[i][1]));
+    }
+    pathParts.push('L', xPx(distMax), PAD_T + CH, 'L', PAD_L, PAD_T + CH, 'Z');
+
+    /* ── Y-axis: choose ~4 rounded tick values ── */
+    function niceStep(range, ticks) {
+      var raw  = range / ticks;
+      var mag  = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+      var norm = raw / mag;
+      var step = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10;
+      return step * mag;
+    }
+    var yStep    = niceStep(elevRange, 4);
+    var yTickMin = Math.ceil(elevMin / yStep) * yStep;
+    var yTicks   = [];
+    for (var v = yTickMin; v <= elevMax + 0.01; v += yStep) yTicks.push(Math.round(v));
+
+    /* ── Format X-axis distance labels ── */
+    function fmtDist(m) {
+      if (IMPERIAL) {
+        var miles = m / 1609.344;
+        return miles >= 0.1 ? miles.toFixed(1) + '\u00a0mi' : Math.round(m * 3.28084) + '\u00a0ft';
+      }
+      return m >= 1000 ? (m / 1000).toFixed(1) + '\u00a0km' : Math.round(m) + '\u00a0m';
+    }
+
+    /* ── Assemble SVG ── */
+    var ns   = 'http://www.w3.org/2000/svg';
+    var grad = 'track-elev-grad-' + ELEV_ID;
+
+    var svgParts = [
+      '<svg xmlns="' + ns + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">',
+
+      '<defs>',
+      '<linearGradient id="' + grad + '" x1="0" y1="0" x2="0" y2="1">',
+      '<stop offset="0%" stop-color="' + color + '" stop-opacity="0.35"/>',
+      '<stop offset="100%" stop-color="' + color + '" stop-opacity="0.05"/>',
+      '</linearGradient>',
+      '</defs>',
+
+      /* Horizontal grid lines */
+      yTicks.map(function(t) {
+        var y = yPx(t);
+        return '<line x1="' + PAD_L + '" y1="' + y + '" x2="' + (PAD_L + CW) + '" y2="' + y
+          + '" stroke="#ccc" stroke-width="0.8" stroke-dasharray="3,3"/>';
+      }).join(''),
+
+      /* Filled area */
+      '<path d="' + pathParts.join(' ') + '" fill="url(#' + grad + ')"/>',
+
+      /* Stroke line on top */
+      '<path d="M ' + xPx(pts[0][0]) + ' ' + yPx(pts[0][1])
+        + pts.slice(1).map(function(p) { return 'L ' + xPx(p[0]) + ' ' + yPx(p[1]); }).join(' ')
+        + '" fill="none" stroke="' + color + '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>',
+
+      /* Y-axis labels */
+      yTicks.map(function(t) {
+        var y = yPx(t);
+        return '<text x="' + (PAD_L - 6) + '" y="' + y
+          + '" text-anchor="end" dominant-baseline="middle"'
+          + ' font-family="Arial,Helvetica,sans-serif" font-size="13" fill="#888">'
+          + Math.round(t) + elevUnit + '</text>';
+      }).join(''),
+
+      /* X-axis: start and end distance labels */
+      '<text x="' + PAD_L + '" y="' + (H - 4) + '"'
+        + ' text-anchor="start" font-family="Arial,Helvetica,sans-serif" font-size="13" fill="#aaa">0</text>',
+      '<text x="' + (PAD_L + CW) + '" y="' + (H - 4) + '"'
+        + ' text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="13" fill="#aaa">'
+        + fmtDist(distMax) + '</text>',
+
+      '</svg>'
+    ];
+
+    el.innerHTML = svgParts.join('');
+  }
+
+  /* ── Build the multi-track legend bar ── */
+  function buildLegend() {
+    if (!SHOW_LEGEND) return;
+    var el = document.getElementById(LEGEND_ID);
+    if (!el) return;
+
+    /* Filter to tracks that have a name and aren't popup:false reference lines */
+    var items = multiTracks.filter(function(r) { return r.name && r.popup !== false; });
+    if (!items.length) { el.style.display = 'none'; return; }
+
+    var sep = '<span class="track-legend-sep">\u25c6</span>';
+    el.innerHTML = items.map(function(r, idx) {
+      var color = resolveColor(r.color, r.paletteIdx);
+      var swatch = '<span class="track-legend-swatch" style="background:' + color + ';"></span>';
+      var labelURL = r.legend_url || r.url;
+      var label = labelURL
+        ? '<a href="' + labelURL + '" style="text-decoration:underline;">' + r.name + '</a>'
+        : r.name;
+      return (idx > 0 ? sep : '')
+        + '<span class="track-legend-item">' + swatch + '<span>' + label + '</span></span>';
+    }).join('');
+  }
+
+  /* ── Main map initialisation ── */
+  function initMap() {
+    var container = document.getElementById(MAP_ID);
+    if (!container) return;
+
+    ensureLightbox();
+    ensureVideoPlayer();
+
+    /* Collect waypoint image URLs for gallery browsing */
+    var imageGallery = [];
+    waypoints.forEach(function(wp) {
+      if (isImageUrl(wp.url)) imageGallery.push({ url: wp.url, name: wp.name });
+    });
+
+    /* Intercept lightbox and video trigger clicks inside waypoint popups */
+    container.addEventListener('click', function(e) {
+      var imgLink = e.target.closest('.map-lightbox-trigger');
+      if (imgLink) {
+        e.preventDefault();
+        var linkUrl = imgLink.getAttribute('href');
+        var idx = 0;
+        for (var i = 0; i < imageGallery.length; i++) {
+          if (imageGallery[i].url === linkUrl) { idx = i; break; }
+        }
+        window.__mapLightbox.open(imageGallery, idx);
+        return;
+      }
+      var vidLink = e.target.closest('.map-video-trigger');
+      if (vidLink) {
+        e.preventDefault();
+        window.__mapVideoPlayer.open(vidLink.getAttribute('href'), vidLink.getAttribute('data-name') || '');
+      }
+    });
+
+    var map = L.map(MAP_ID, { scrollWheelZoom: false, zoomSnap: 0, zoomDelta: 1 });
+    var bm  = window.__mapBasemaps[BASEMAP] || window.__mapBasemaps.osm;
+    L.tileLayer(bm.url, {
+      attribution: bm.attribution,
+      maxZoom:     bm.maxZoom    || 19,
+      subdomains:  bm.subdomains || ''
+    }).addTo(map);
+
+    /* Fit map once all async GPX loads have resolved */
+    var allBounds    = [];
+    var pendingCount = 0;
+
+    function onTrackLoaded(bounds) {
+      if (bounds) allBounds.push(bounds);
+      if (--pendingCount === 0 && allBounds.length > 0) {
+        var combined = allBounds[0];
+        for (var i = 1; i < allBounds.length; i++) combined.extend(allBounds[i]);
+        map.fitBounds(combined, { padding: [40, 50] });
+      }
+    }
+
+    /* ── Single-track ── */
+    if (!IS_MULTI) {
+      if (!singleTrack.gpx) {
+        statsError('No GPX file specified. Add a \u201cgpx\u201d field to your data file.');
+        return;
+      }
+      pendingCount = 1;
+
+      new L.GPX(singleTrack.gpx, {
+        async: true,
+        marker_options: { startIconUrl: null, endIconUrl: null, shadowUrl: null },
+        polyline_options: {
+          color:   singleTrack.color,
+          weight:  singleTrack.weight,
+          opacity: 0.85,
+          lineJoin:'round',
+          lineCap: 'round'
+        }
+      })
+      .on('loaded', function(e) {
+        simplifyGpxLayer(e.target, SIMPLIFY_TOLERANCE);
+
+        if (SHOW_MARKERS) {
+          placeEndpointMarkers(e.target, singleTrack.color, map);
+        }
+
+        if (singleTrack.name || singleTrack.url) {
+          e.target.getLayers().forEach(function(layer) {
+            if (layer.bindPopup) {
+              layer.bindPopup(
+                trackPopupHTML(singleTrack.name, singleTrack.note, singleTrack.url),
+                { autoPanPaddingTopLeft: [50, 10] }
+              );
+            }
+          });
+        }
+        onTrackLoaded(e.target.getBounds());
+        populateStats(e.target);
+        if (SHOW_ELEVATION) {
+          drawElevationProfile(
+            e.target.get_elevation_data ? e.target.get_elevation_data() : [],
+            singleTrack.color
+          );
+        }
+      })
+      .on('error', function() {
+        statsError('Could not load GPX file. Check the path and confirm it is hosted on your blog.');
+        onTrackLoaded(null);
+      })
+      .addTo(map);
+
+      /* Waypoint markers */
+      waypoints.forEach(function(wp) {
+        var lat = parseFloat(wp.lat), lon = parseFloat(wp.lon);
+        if (isNaN(lat) || isNaN(lon)) return;
+        var color  = wp.color || singleTrack.color;
+        var icon   = createIcon(wp.icon || 'pin', color);
+        var marker = L.marker([lat, lon], { icon: icon }).addTo(map);
+        var nameHTML;
+        if (wp.url && isImageUrl(wp.url)) {
+          nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + wp.url + '" class="map-lightbox-trigger" style="color:#007bff;">' + wp.name + '</a></h3>';
+        } else if (wp.url && isVideoUrl(wp.url)) {
+          nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + wp.url + '" class="map-video-trigger" data-name="' + wp.name.replace(/"/g, '&quot;') + '" style="color:#007bff;">' + wp.name + '</a></h3>';
+        } else if (wp.url && isAudioUrl(wp.url)) {
+          nameHTML = '<h3 style="margin:0;font-size:16px;">' + wp.name + '</h3>';
+        } else if (wp.url) {
+          nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + wp.url + '" target="_blank" rel="noopener" style="color:#007bff;">' + wp.name + '</a></h3>';
+        } else {
+          nameHTML = '<h3 style="margin:0;font-size:16px;">' + wp.name + '</h3>';
+        }
+        var audioHTML = '';
+        if (wp.url && isAudioUrl(wp.url)) {
+          audioHTML = '<div class="map-audio-player"><audio controls controlsList="nodownload" preload="metadata" src="' + wp.url + '"></audio></div>';
+        }
+        marker.bindPopup(
+          '<div style="font-family:sans-serif;padding:5px;">'
+            + nameHTML
+            + (wp.note ? '<p class="track-popup-note" style="margin:6px 0 0;font-size:14px;">' + wp.note + '</p>' : '')
+            + audioHTML
+            + '</div>',
+          { autoPanPaddingTopLeft: [50, 10] }
+        );
+      });
+
+    /* ── Multi-track ── */
+    } else {
+      if (!multiTracks.length) return;
+      pendingCount = multiTracks.length;
+
+      buildLegend();
+
+      multiTracks.forEach(function(track) {
+        if (!track.gpx) { onTrackLoaded(null); return; }
+
+        var color  = resolveColor(track.color, track.paletteIdx);
+        var weight = track.weight || DEFAULT_WEIGHT;
+
+        new L.GPX(track.gpx, {
+          async: true,
+          marker_options: { startIconUrl: null, endIconUrl: null, shadowUrl: null },
+          polyline_options: {
+            color:   color,
+            weight:  weight,
+            opacity: 0.85,
+            lineJoin:'round',
+            lineCap: 'round'
+          }
+        })
+        .on('loaded', function(e) {
+          simplifyGpxLayer(e.target, SIMPLIFY_TOLERANCE);
+
+          if (SHOW_MARKERS && track.markers !== false) {
+            placeEndpointMarkers(e.target, color, map);
+          }
+
+          e.target.getLayers().forEach(function(layer) {
+            if (!layer.on) return;
+            layer.on('mouseover', function() { layer.bringToFront(); });
+            if (track.popup !== false && layer.bindPopup) {
+              layer.bindPopup(
+                trackPopupHTML(track.name, track.note, track.url),
+                { autoPanPaddingTopLeft: [50, 10] }
+              );
+            }
+          });
+          onTrackLoaded(e.target.getBounds());
+        })
+        .on('error', function() { onTrackLoaded(null); })
+        .addTo(map);
+      });
+    }
+  }
+
+  /*
+   * Two-stage loader: Leaflet → leaflet-gpx → initMap.
+   * Uses the same window.__leafletQueue as the Maps plugin so both
+   * can coexist on a single page without double-loading Leaflet.
+   */
+  function loadGpxLib(cb) {
+    if (typeof L !== 'undefined' && typeof L.GPX !== 'undefined') { cb(); return; }
+    if (window.__gpxLoading) { window.__gpxQueue.push(cb); return; }
+    window.__gpxLoading = true;
+    window.__gpxQueue   = [cb];
+    var s    = document.createElement('script');
+    s.src    = 'https://unpkg.com/leaflet-gpx@1.7.0/gpx.js';
+    s.onload = function() {
+      window.__gpxQueue.forEach(function(fn) { try { fn(); } catch(e) { console.error('Track init error:', e); } });
+      window.__gpxQueue   = [];
+      window.__gpxLoading = false;
+    };
+    document.head.appendChild(s);
+  }
+
+  function ensureLeaflet(cb) {
+    if (typeof L !== 'undefined') { cb(); return; }
+    if (window.__leafletLoading) { window.__leafletQueue.push(cb); return; }
+    window.__leafletLoading = true;
+    window.__leafletQueue   = [cb];
+    var css  = document.createElement('link');
+    css.rel  = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    var js    = document.createElement('script');
+    js.src    = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload = function() {
+      runLeafletQueue();
+    };
+    document.head.appendChild(js);
+  }
+
+  function runLeafletQueue() {
+    window.__leafletQueue.forEach(function(fn) { try { fn(); } catch(e) { console.error('Leaflet init error:', e); } });
+    window.__leafletQueue   = [];
+    window.__leafletLoading = false;
+  }
+
+  ensureLeaflet(function() { loadGpxLib(initMap); });
+
+})();
+</script>
+
+{{ else }}
+<!-- track shortcode: No data file found at data/tracks/{{ $source }}.yml -->
+{{ end }}
