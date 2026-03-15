@@ -272,14 +272,12 @@
 {{ if $data }}
 
 {{/* ── Detect single vs multi-track ── */}}
-{{/* Detect single vs multi-track by checking whether $data is a map.
-     isset crashes in Hugo 0.91 when called on a slice, so we guard with
-     kindIs first. Single-track files are maps with a "gpx" key; multi-track
-     files are YAML lists and will be slices. */}}
+{{/* A single-track YAML file is a map (Go type starts with "map");
+     a multi-track YAML file is a list (Go type starts with "[]").
+     We use printf "%T" because reflect.IsSlice is unavailable in
+     Hugo 0.91 and isset errors on slices in newer Hugo versions. */}}
 {{ $isMulti := true }}
-{{ if kindIs "map" $data }}
-  {{ if isset $data "gpx" }}{{ $isMulti = false }}{{ end }}
-{{ end }}
+{{ if findRE "^map" (printf "%T" $data) }}{{ $isMulti = false }}{{ end }}
 
 {{/* ── Resolve single-track fields ── */}}
 {{ $gpxURL         := "" }}
@@ -394,7 +392,6 @@
 {{/* ── Lightbox CSS (once per page — shared scratch key with Maps plugin) ── */}}
 {{ if not (.Page.Scratch.Get "lightboxCSS") }}
   {{ .Page.Scratch.Set "lightboxCSS" true }}
-  {{ .Page.Scratch.Set "videoPlayerCSS" true }}
   {{ partialCached "track-media-styles.html" . }}
 {{ end }}
 
@@ -596,48 +593,6 @@
     if (el) el.innerHTML = '<span class="track-stats-error">' + msg + '</span>';
   }
 
-  /* Create a Leaflet icon from __trackShapes */
-  var iconCache = {};
-  function createIcon(shape, color) {
-    var key = shape + '|' + color;
-    if (iconCache[key]) return iconCache[key];
-    var def = window.__trackShapes[shape];
-    var icon;
-    if (def) {
-      var opts = {
-        iconUrl:    'data:image/svg+xml;base64,' + btoa(def.svg(color)),
-        iconSize:   [def.w, def.h],
-        iconAnchor: def.anchor,
-        popupAnchor:def.popup
-      };
-      if (def.shadow) {
-        opts.shadowUrl    = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
-        opts.shadowSize   = [41, 41];
-        opts.shadowAnchor = [12, 41];
-      }
-      icon = L.icon(opts);
-    } else if (/^fa-/.test(shape)) {
-      loadFontAwesome();
-      icon = L.divIcon({
-        html:        '<i class="fa-solid ' + shape + '" style="font-size:20px;color:' + color + ';"></i>',
-        className:   '',
-        iconSize:    [28, 28],
-        iconAnchor:  [14, 14],
-        popupAnchor: [0, -18]
-      });
-    } else {
-      icon = L.divIcon({
-        html:       '<span style="font-size:22px;line-height:1;">' + shape + '</span>',
-        className:  '',
-        iconSize:   [26, 26],
-        iconAnchor: [13, 13],
-        popupAnchor:[0, -18]
-      });
-    }
-    iconCache[key] = icon;
-    return icon;
-  }
-
   /* Place start and finish markers at GPX track endpoints.
      If the track is a loop (start ≈ end within ~30 m), only the start
      marker is placed to avoid two icons stacked on the same point.
@@ -662,9 +617,9 @@
     }
     if (!startLL) return;
 
-    L.marker(startLL, { icon: createIcon('start',  color), zIndexOffset: 100 }).addTo(map);
+    L.marker(startLL, { icon: window.__createIcon('start',  color), zIndexOffset: 100 }).addTo(map);
     if (endLL) {
-      L.marker(endLL,   { icon: createIcon('finish', color), zIndexOffset: 100 }).addTo(map);
+      L.marker(endLL,   { icon: window.__createIcon('finish', color), zIndexOffset: 100 }).addTo(map);
     }
   }
 
@@ -813,7 +768,7 @@
       var swatch = '<span class="track-legend-swatch" style="background:' + color + ';"></span>';
       var labelURL = r.legend_url || r.url;
       var label = labelURL
-        ? '<a href="' + labelURL + '" style="text-decoration:underline;">' + r.name + '</a>'
+        ? '<a href="' + labelURL + '" style="color:#444;text-decoration:underline;">' + r.name + '</a>'
         : r.name;
       return (idx > 0 ? sep : '')
         + '<span class="track-legend-item">' + swatch + '<span>' + label + '</span></span>';
@@ -828,10 +783,14 @@
     ensureLightbox();
     ensureVideoPlayer();
 
-    /* Collect waypoint image URLs for gallery browsing */
+    /* Collect single-image waypoint URLs for global gallery browsing */
     var imageGallery = [];
     waypoints.forEach(function(wp) {
-      if (isImageUrl(wp.url)) imageGallery.push({ url: wp.url, name: wp.name });
+      if (!wp.url) return;
+      var urls = wp.url.split(',').map(function(u) { return u.trim(); }).filter(Boolean);
+      if (urls.length === 1 && isImageUrl(urls[0])) {
+        imageGallery.push({ url: urls[0], name: wp.name });
+      }
     });
 
     /* Intercept lightbox and video trigger clicks inside waypoint popups */
@@ -839,6 +798,13 @@
       var imgLink = e.target.closest('.map-lightbox-trigger');
       if (imgLink) {
         e.preventDefault();
+        /* Per-waypoint gallery (comma-separated images) */
+        var customGallery = imgLink.getAttribute('data-gallery');
+        if (customGallery) {
+          try { window.__mapLightbox.open(JSON.parse(customGallery), 0); } catch(ex) {}
+          return;
+        }
+        /* Global gallery */
         var linkUrl = imgLink.getAttribute('href');
         var idx = 0;
         for (var i = 0; i < imageGallery.length; i++) {
@@ -931,23 +897,33 @@
         var lat = parseFloat(wp.lat), lon = parseFloat(wp.lon);
         if (isNaN(lat) || isNaN(lon)) return;
         var color  = wp.color || singleTrack.color;
-        var icon   = createIcon(wp.icon || 'pin', color);
+        var icon   = window.__createIcon(wp.icon || 'pin', color);
         var marker = L.marker([lat, lon], { icon: icon }).addTo(map);
+
+        /* Parse URL — check for comma-separated image gallery */
+        var urls = wp.url ? wp.url.split(',').map(function(u) { return u.trim(); }).filter(Boolean) : [];
+        var allImages = urls.length > 1 && urls.every(function(u) { return isImageUrl(u); });
+        var effectiveUrl = urls[0] || '';
         var nameHTML;
-        if (wp.url && isImageUrl(wp.url)) {
-          nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + wp.url + '" class="map-lightbox-trigger" style="color:#007bff;">' + wp.name + '</a></h3>';
-        } else if (wp.url && isVideoUrl(wp.url)) {
-          nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + wp.url + '" class="map-video-trigger" data-name="' + wp.name.replace(/"/g, '&quot;') + '" style="color:#007bff;">' + wp.name + '</a></h3>';
-        } else if (wp.url && isAudioUrl(wp.url)) {
+
+        if (allImages) {
+          var gal = urls.map(function(u) { return {url:u, name:wp.name}; });
+          var galJson = JSON.stringify(gal).replace(/'/g,'&#39;');
+          nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + effectiveUrl + '" class="map-lightbox-trigger" data-gallery=\'' + galJson + '\' style="color:#007bff;">' + wp.name + '</a></h3>';
+        } else if (effectiveUrl && isImageUrl(effectiveUrl)) {
+          nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + effectiveUrl + '" class="map-lightbox-trigger" style="color:#007bff;">' + wp.name + '</a></h3>';
+        } else if (effectiveUrl && isVideoUrl(effectiveUrl)) {
+          nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + effectiveUrl + '" class="map-video-trigger" data-name="' + wp.name.replace(/"/g, '&quot;') + '" style="color:#007bff;">' + wp.name + '</a></h3>';
+        } else if (effectiveUrl && isAudioUrl(effectiveUrl)) {
           nameHTML = '<h3 style="margin:0;font-size:16px;">' + wp.name + '</h3>';
-        } else if (wp.url) {
-          nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + wp.url + '" target="_blank" rel="noopener" style="color:#007bff;">' + wp.name + '</a></h3>';
+        } else if (effectiveUrl) {
+          nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + effectiveUrl + '" target="_blank" rel="noopener" style="color:#007bff;">' + wp.name + '</a></h3>';
         } else {
           nameHTML = '<h3 style="margin:0;font-size:16px;">' + wp.name + '</h3>';
         }
         var audioHTML = '';
-        if (wp.url && isAudioUrl(wp.url)) {
-          audioHTML = '<div class="map-audio-player"><audio controls controlsList="nodownload" preload="metadata" src="' + wp.url + '"></audio></div>';
+        if (effectiveUrl && isAudioUrl(effectiveUrl)) {
+          audioHTML = '<div class="map-audio-player"><audio controls controlsList="nodownload" preload="metadata" src="' + effectiveUrl + '"></audio></div>';
         }
         marker.bindPopup(
           '<div style="font-family:sans-serif;padding:5px;">'
