@@ -187,15 +187,18 @@
       audio player directly in the waypoint popup.
     Anything else — opens as a normal link in a new tab.
 
-  Available waypoint icons:
-    Generic:  pin, pin-small, star, heart, point, disc, bullseye,
-              flag-checkered, camera, video, image, gallery,
-              mountain, binoculars, landmark, utensils,
-              droplet, microphone, triangle-exclamation
-    Circles:  circle-heart, circle-star,
-              circle-camera, circle-video, circle-image, circle-gallery
-    Numbered: circle-0 through circle-9, circle-00 through circle-99
-    Emoji:    any other value rendered as-is (e.g. "⛺", "📸", "⚠️")
+  Available waypoint icons (one set, shared by Maps, Tracks and Travelpath):
+    Pins:        pin, pin-small
+    Plain:       point (12px), circle (20px, white stroke), disc (26px),
+                 bullseye (hollow ring)
+    Badges:      check, x, dot, plus, minus, heart, star, star-half,
+                 star-empty, icon-new, camera, video, image, gallery,
+                 mountain, binoculars, landmark, utensils, droplet,
+                 microphone, flag, warning
+    Endpoints:   start, finish
+    Numbered:    icon-0 ... icon-9 (large), icon-00 ... icon-99 (small)
+    Font Awesome: any "fa-" prefixed name, e.g. "fa-utensils"
+    Emoji:       any other value is rendered as-is, e.g. "🏯"
 
   ── GPX files ───────────────────────────────────────────────────────
 
@@ -389,16 +392,19 @@
 {{ $showLegend := false }}
 {{ if and $isMulti (eq $legendParam "yes") }}{{ $showLegend = true }}{{ end }}
 
-{{/* ── Lightbox CSS (once per page — shared scratch key with Maps plugin) ── */}}
-{{ if not (.Page.Scratch.Get "lightboxCSS") }}
-  {{ .Page.Scratch.Set "lightboxCSS" true }}
-  {{ partialCached "track-media-styles.html" . }}
+{{/* ── Once-per-page assets ──
+     The shared core and overlay CSS are emitted by whichever sibling
+     shortcode renders first; the rest skip. The version is part of the
+     partial name and of the Scratch key, so each plugin always gets the
+     core it shipped with (see the header of geo-core-v1.html). */}}
+{{ if not (.Page.Scratch.Get "geoCore-v1") }}
+  {{ .Page.Scratch.Set "geoCore-v1" true }}
+  {{ partialCached "geo-core-v1.html" . }}
 {{ end }}
 
-{{/* ── Video player + audio CSS (once per page — shared with Maps plugin) ── */}}
-{{ if not (.Page.Scratch.Get "videoPlayerCSS") }}
-  {{ .Page.Scratch.Set "videoPlayerCSS" true }}
-  {{ partialCached "track-video-styles.html" . }}
+{{ if not (.Page.Scratch.Get "geoMediaCSS-v1") }}
+  {{ .Page.Scratch.Set "geoMediaCSS-v1" true }}
+  {{ partialCached "geo-media-styles-v1.html" . }}
 {{ end }}
 
 {{/* ── Track CSS (once per page) ── */}}
@@ -407,11 +413,10 @@
   {{ partialCached "track-styles.html" . }}
 {{ end }}
 
-{{/* ── Shared JS: basemaps + icon shapes + media helpers (once per page) ── */}}
-{{ if not (.Page.Scratch.Get "trackJS") }}
-  {{ .Page.Scratch.Set "trackJS" true }}
-  {{ partialCached "track-shapes.html" . }}
-  {{ partialCached "track-media-helpers.html" . }}
+{{/* ── Tracks-only JS: colour palette + simplifier (once per page) ── */}}
+{{ if not (.Page.Scratch.Get "trackLib") }}
+  {{ .Page.Scratch.Set "trackLib" true }}
+  {{ partialCached "track-lib.html" . }}
 {{ end }}
 
 {{/* ── HTML: map container + optional stats bar + optional elevation chart + optional legend ── */}}
@@ -420,18 +425,17 @@
 {{ $hasLegend     := and $isMulti $showLegend }}
 {{ $elevID        := printf "track-elev-%s-%d" $source $trackN }}
 {{ $legendID      := printf "track-legend-%s-%d" $source $trackN }}
-{{/* Map top is always rounded; bottom rounds only if nothing follows */}}
-{{ $mapBottomRadius := "12px" }}
-{{ if or $hasStatsBar $hasElevation $hasLegend }}{{ $mapBottomRadius = "0" }}{{ end }}
-<p class="track-visually-hidden">[Interactive track map — visit the original post to explore it.]</p>
-<div id="{{ $mapID }}" style="width:100%; height:{{ $height }} !important; border-radius:12px 12px {{ $mapBottomRadius }} {{ $mapBottomRadius }}; margin:30px 0 0; position:relative; z-index:0;">
-  <noscript><div style="display:flex;align-items:center;justify-content:center;height:100%;background:#f0f0f0;border-radius:inherit;font-family:sans-serif;font-size:14px;color:#666;padding:20px;text-align:center;">This interactive track map requires JavaScript to display.</div></noscript>
+{{/* Map top is always rounded; the bottom rounds only if nothing follows,
+     handled by .mb-track-map--joined in track-styles.html */}}
+<p class="mb-sr-only">[Interactive track map — visit the original post to explore it.]</p>
+<div id="{{ $mapID }}" class="mb-track-map{{ if or $hasStatsBar $hasElevation $hasLegend }} mb-track-map--joined{{ end }}" style="--mb-map-h: {{ $height }};">
+  <noscript><div class="mb-noscript">This interactive track map requires JavaScript to display.</div></noscript>
 </div>
 {{ if $hasStatsBar }}
-<div id="{{ $statsID }}" class="track-stats-bar{{ if $hasElevation }} track-has-elevation{{ end }}" style="{{ if not $hasElevation }}border-radius:0 0 12px 12px;{{ else }}border-radius:0;{{ end }}"><span class="track-stats-loading">Loading track&hellip;</span></div>
+<div id="{{ $statsID }}" class="mb-track-stats-bar{{ if $hasElevation }} mb-track-has-elevation{{ end }}"><span class="mb-track-stats-loading">Loading track&hellip;</span></div>
 {{ end }}
-{{ if $hasElevation }}<div id="{{ $elevID }}" class="track-elevation"></div>{{ end }}
-{{ if $hasLegend }}<div id="{{ $legendID }}" class="track-legend"></div>{{ end }}
+{{ if $hasElevation }}<div id="{{ $elevID }}" class="mb-track-elevation"></div>{{ end }}
+{{ if $hasLegend }}<div id="{{ $legendID }}" class="mb-track-legend"></div>{{ end }}
 
 {{/* ── Per-map initialisation script ── */}}
 <script>
@@ -563,7 +567,7 @@
       : (name ? '<h3 style="margin:0;font-size:15px;">' + name + '</h3>' : '');
     return '<div style="font-family:sans-serif;padding:4px 2px;">'
       + nameHTML
-      + (note ? '<p class="track-popup-note" style="margin:5px 0 0;font-size:13px;">' + note + '</p>' : '')
+      + (note ? '<p class="mb-track-popup-note" style="margin:5px 0 0;font-size:13px;">' + note + '</p>' : '')
       + '</div>';
   }
 
@@ -576,21 +580,21 @@
     var gain = formatElev    (gpxLayer.get_elevation_gain  ? gpxLayer.get_elevation_gain()  : 0);
     var loss = formatElev    (gpxLayer.get_elevation_loss  ? gpxLayer.get_elevation_loss()  : 0);
     var time = formatDuration(gpxLayer.get_moving_time     ? gpxLayer.get_moving_time()     : 0);
-    var sep  = ' <span class="track-stat-sep">\u25c6</span> ';
+    var sep  = ' <span class="mb-track-stat-sep">\u25c6</span> ';
     var parts = [];
-    if (singleTrack.name)        parts.push('<span class="track-stats-name">'       + singleTrack.name        + '</span>');
-    if (dist)                    parts.push('<span class="track-stat">\u2194\u00a0' + dist                    + '</span>');
-    if (gain)                    parts.push('<span class="track-stat">\u2191\u00a0' + gain                    + '</span>');
-    if (loss)                    parts.push('<span class="track-stat">\u2193\u00a0' + loss                    + '</span>');
-    if (time)                    parts.push('<span class="track-stat">'             + time                    + '</span>');
-    if (singleTrack.note) parts.push('<span class="track-stats-desc">'       + singleTrack.note + '</span>');
-    el.innerHTML = parts.length ? parts.join(sep) : '<span class="track-stats-desc">Track loaded.</span>';
+    if (singleTrack.name)        parts.push('<span class="mb-track-stats-name">'       + singleTrack.name        + '</span>');
+    if (dist)                    parts.push('<span class="mb-track-stat">\u2194\u00a0' + dist                    + '</span>');
+    if (gain)                    parts.push('<span class="mb-track-stat">\u2191\u00a0' + gain                    + '</span>');
+    if (loss)                    parts.push('<span class="mb-track-stat">\u2193\u00a0' + loss                    + '</span>');
+    if (time)                    parts.push('<span class="mb-track-stat">'             + time                    + '</span>');
+    if (singleTrack.note) parts.push('<span class="mb-track-stats-desc">'       + singleTrack.note + '</span>');
+    el.innerHTML = parts.length ? parts.join(sep) : '<span class="mb-track-stats-desc">Track loaded.</span>';
   }
 
   function statsError(msg) {
     if (!SHOW_STATS) return;
     var el = document.getElementById(STATS_ID);
-    if (el) el.innerHTML = '<span class="track-stats-error">' + msg + '</span>';
+    if (el) el.innerHTML = '<span class="mb-track-stats-error">' + msg + '</span>';
   }
 
   /* Place start and finish markers at GPX track endpoints.
@@ -617,9 +621,9 @@
     }
     if (!startLL) return;
 
-    L.marker(startLL, { icon: window.__createIcon('start',  color), zIndexOffset: 100 }).addTo(map);
+    L.marker(startLL, { icon: window.__geoCore.createIcon('start',  color), zIndexOffset: 100 }).addTo(map);
     if (endLL) {
-      L.marker(endLL,   { icon: window.__createIcon('finish', color), zIndexOffset: 100 }).addTo(map);
+      L.marker(endLL,   { icon: window.__geoCore.createIcon('finish', color), zIndexOffset: 100 }).addTo(map);
     }
   }
 
@@ -762,16 +766,16 @@
     var items = multiTracks.filter(function(r) { return r.name && r.popup !== false; });
     if (!items.length) { el.style.display = 'none'; return; }
 
-    var sep = '<span class="track-legend-sep">\u25c6</span>';
+    var sep = '<span class="mb-track-legend-sep">\u25c6</span>';
     el.innerHTML = items.map(function(r, idx) {
       var color = resolveColor(r.color, r.paletteIdx);
-      var swatch = '<span class="track-legend-swatch" style="background:' + color + ';"></span>';
+      var swatch = '<span class="mb-track-legend-swatch" style="background:' + color + ';"></span>';
       var labelURL = r.legend_url || r.url;
       var label = labelURL
-        ? '<a href="' + labelURL + '" style="color:#444;text-decoration:underline;">' + r.name + '</a>'
+        ? '<a href="' + labelURL + '">' + r.name + '</a>'
         : r.name;
       return (idx > 0 ? sep : '')
-        + '<span class="track-legend-item">' + swatch + '<span>' + label + '</span></span>';
+        + '<span class="mb-track-legend-item">' + swatch + '<span>' + label + '</span></span>';
     }).join('');
   }
 
@@ -780,48 +784,26 @@
     var container = document.getElementById(MAP_ID);
     if (!container) return;
 
-    ensureLightbox();
-    ensureVideoPlayer();
+    var core = window.__geoCore;
+    core.ensureLightbox();
+    core.ensureVideoPlayer();
 
-    /* Collect single-image waypoint URLs for global gallery browsing */
+    /* Collect single-image waypoint URLs so clicking one photo waypoint
+       lets you arrow through every photo waypoint on THIS map. The
+       core's one delegated click listener finds this through the
+       [data-geo-scope] ancestor; there is no per-map click wiring. */
     var imageGallery = [];
     waypoints.forEach(function(wp) {
       if (!wp.url) return;
       var urls = wp.url.split(',').map(function(u) { return u.trim(); }).filter(Boolean);
-      if (urls.length === 1 && isImageUrl(urls[0])) {
+      if (urls.length === 1 && core.isImageUrl(urls[0])) {
         imageGallery.push({ url: urls[0], name: wp.name });
       }
     });
-
-    /* Intercept lightbox and video trigger clicks inside waypoint popups */
-    container.addEventListener('click', function(e) {
-      var imgLink = e.target.closest('.map-lightbox-trigger');
-      if (imgLink) {
-        e.preventDefault();
-        /* Per-waypoint gallery (comma-separated images) */
-        var customGallery = imgLink.getAttribute('data-gallery');
-        if (customGallery) {
-          try { window.__mapLightbox.open(JSON.parse(customGallery), 0); } catch(ex) {}
-          return;
-        }
-        /* Global gallery */
-        var linkUrl = imgLink.getAttribute('href');
-        var idx = 0;
-        for (var i = 0; i < imageGallery.length; i++) {
-          if (imageGallery[i].url === linkUrl) { idx = i; break; }
-        }
-        window.__mapLightbox.open(imageGallery, idx);
-        return;
-      }
-      var vidLink = e.target.closest('.map-video-trigger');
-      if (vidLink) {
-        e.preventDefault();
-        window.__mapVideoPlayer.open(vidLink.getAttribute('href'), vidLink.getAttribute('data-name') || '');
-      }
-    });
+    core.registerGallery(container, imageGallery);
 
     var map = L.map(MAP_ID, { scrollWheelZoom: false, zoomSnap: 0, zoomDelta: 1 });
-    var bm  = window.__mapBasemaps[BASEMAP] || window.__mapBasemaps.osm;
+    var bm  = core.basemaps[BASEMAP] || core.basemaps.osm;
     L.tileLayer(bm.url, {
       attribution: bm.attribution,
       maxZoom:     bm.maxZoom    || 19,
@@ -897,12 +879,12 @@
         var lat = parseFloat(wp.lat), lon = parseFloat(wp.lon);
         if (isNaN(lat) || isNaN(lon)) return;
         var color  = wp.color || singleTrack.color;
-        var icon   = window.__createIcon(wp.icon || 'pin', color);
+        var icon   = window.__geoCore.createIcon(wp.icon || 'pin', color);
         var marker = L.marker([lat, lon], { icon: icon }).addTo(map);
 
         /* Parse URL — check for comma-separated image gallery */
         var urls = wp.url ? wp.url.split(',').map(function(u) { return u.trim(); }).filter(Boolean) : [];
-        var allImages = urls.length > 1 && urls.every(function(u) { return isImageUrl(u); });
+        var allImages = urls.length > 1 && urls.every(function(u) { return window.__geoCore.isImageUrl(u); });
         var effectiveUrl = urls[0] || '';
         var nameHTML;
 
@@ -910,11 +892,11 @@
           var gal = urls.map(function(u) { return {url:u, name:wp.name}; });
           var galJson = JSON.stringify(gal).replace(/'/g,'&#39;');
           nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + effectiveUrl + '" class="map-lightbox-trigger" data-gallery=\'' + galJson + '\' style="color:#007bff;">' + wp.name + '</a></h3>';
-        } else if (effectiveUrl && isImageUrl(effectiveUrl)) {
+        } else if (effectiveUrl && window.__geoCore.isImageUrl(effectiveUrl)) {
           nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + effectiveUrl + '" class="map-lightbox-trigger" style="color:#007bff;">' + wp.name + '</a></h3>';
-        } else if (effectiveUrl && isVideoUrl(effectiveUrl)) {
+        } else if (effectiveUrl && window.__geoCore.isVideoUrl(effectiveUrl)) {
           nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + effectiveUrl + '" class="map-video-trigger" data-name="' + wp.name.replace(/"/g, '&quot;') + '" style="color:#007bff;">' + wp.name + '</a></h3>';
-        } else if (effectiveUrl && isAudioUrl(effectiveUrl)) {
+        } else if (effectiveUrl && window.__geoCore.isAudioUrl(effectiveUrl)) {
           nameHTML = '<h3 style="margin:0;font-size:16px;">' + wp.name + '</h3>';
         } else if (effectiveUrl) {
           nameHTML = '<h3 style="margin:0;font-size:16px;"><a href="' + effectiveUrl + '" target="_blank" rel="noopener" style="color:#007bff;">' + wp.name + '</a></h3>';
@@ -922,13 +904,13 @@
           nameHTML = '<h3 style="margin:0;font-size:16px;">' + wp.name + '</h3>';
         }
         var audioHTML = '';
-        if (effectiveUrl && isAudioUrl(effectiveUrl)) {
+        if (effectiveUrl && window.__geoCore.isAudioUrl(effectiveUrl)) {
           audioHTML = '<div class="map-audio-player"><audio controls controlsList="nodownload" preload="metadata" src="' + effectiveUrl + '"></audio></div>';
         }
         marker.bindPopup(
           '<div style="font-family:sans-serif;padding:5px;">'
             + nameHTML
-            + (wp.note ? '<p class="track-popup-note" style="margin:6px 0 0;font-size:14px;">' + wp.note + '</p>' : '')
+            + (wp.note ? '<p class="mb-track-popup-note" style="margin:6px 0 0;font-size:14px;">' + wp.note + '</p>' : '')
             + audioHTML
             + '</div>',
           { autoPanPaddingTopLeft: [50, 10] }
@@ -984,50 +966,21 @@
     }
   }
 
-  /*
-   * Two-stage loader: Leaflet → leaflet-gpx → initMap.
-   * Uses the same window.__leafletQueue as the Maps plugin so both
-   * can coexist on a single page without double-loading Leaflet.
-   */
-  function loadGpxLib(cb) {
-    if (typeof L !== 'undefined' && typeof L.GPX !== 'undefined') { cb(); return; }
-    if (window.__gpxLoading) { window.__gpxQueue.push(cb); return; }
-    window.__gpxLoading = true;
-    window.__gpxQueue   = [cb];
-    var s    = document.createElement('script');
-    s.src    = 'https://unpkg.com/leaflet-gpx@1.7.0/gpx.js';
-    s.onload = function() {
-      window.__gpxQueue.forEach(function(fn) { try { fn(); } catch(e) { console.error('Track init error:', e); } });
-      window.__gpxQueue   = [];
-      window.__gpxLoading = false;
-    };
-    document.head.appendChild(s);
-  }
-
-  function ensureLeaflet(cb) {
-    if (typeof L !== 'undefined') { cb(); return; }
-    if (window.__leafletLoading) { window.__leafletQueue.push(cb); return; }
-    window.__leafletLoading = true;
-    window.__leafletQueue   = [cb];
-    var css  = document.createElement('link');
-    css.rel  = 'stylesheet';
-    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(css);
-    var js    = document.createElement('script');
-    js.src    = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    js.onload = function() {
-      runLeafletQueue();
-    };
-    document.head.appendChild(js);
-  }
-
-  function runLeafletQueue() {
-    window.__leafletQueue.forEach(function(fn) { try { fn(); } catch(e) { console.error('Leaflet init error:', e); } });
-    window.__leafletQueue   = [];
-    window.__leafletLoading = false;
-  }
-
-  ensureLeaflet(function() { loadGpxLib(initMap); });
+  /* ── Dependency chain ──
+     Leaflet -> leaflet-gpx -> initMap.
+     leaflet-gpx is Tracks' own dependency, so Tracks declares it; the
+     loading itself is the core's single loadOnce, shared with every
+     plugin on the page. */
+  (window.__geoQueue = window.__geoQueue || []).push(function () {
+    var core = window.__geoCore;
+    core.ensureLeaflet(function () {
+      core.loadOnce('gpx', {
+        js:   'https://unpkg.com/leaflet-gpx@1.7.0/gpx.js',
+        test: function () { return typeof L !== 'undefined' && typeof L.GPX !== 'undefined'; },
+        cb:   initMap
+      });
+    });
+  });
 
 })();
 </script>

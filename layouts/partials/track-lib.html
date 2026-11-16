@@ -1,0 +1,55 @@
+{{/*
+  track-lib.html — JavaScript owned by the Tracks plugin alone:
+  the colour palette and the track simplifier. Everything shared lives
+  in geo-core-v1.html. Emitted once per page behind the "trackLib"
+  Scratch key.
+*/}}
+
+<script>
+/* Fallback palette for multi-track maps without per-track colors */
+window.__trackPalette = window.__trackPalette || [
+  '#E11D48','#7C3AED','#0EA5E9','#16A34A','#D97706',
+  '#0891B2','#9333EA','#DC2626','#059669','#CA8A04'
+];
+
+/*
+ * Ramer-Douglas-Peucker simplification on lat/lng arrays.
+ * Points is an array of L.LatLng objects; tolerance is in degrees.
+ * Returns a reduced array preserving the shape of the track.
+ */
+window.__rdpSimplify = window.__rdpSimplify || function rdp(points, tolerance) {
+  if (points.length <= 2) return points;
+  var tSq = tolerance * tolerance;
+
+  function ptSegDistSq(p, a, b) {
+    var dx = b.lng - a.lng, dy = b.lat - a.lat;
+    if (dx === 0 && dy === 0) {
+      dx = p.lng - a.lng; dy = p.lat - a.lat;
+      return dx * dx + dy * dy;
+    }
+    var t = ((p.lng - a.lng) * dx + (p.lat - a.lat) * dy) / (dx * dx + dy * dy);
+    if (t < 0)      { dx = p.lng - a.lng; dy = p.lat - a.lat; }
+    else if (t > 1) { dx = p.lng - b.lng; dy = p.lat - b.lat; }
+    else            { dx = p.lng - (a.lng + t * dx); dy = p.lat - (a.lat + t * dy); }
+    return dx * dx + dy * dy;
+  }
+
+  function simplifyRange(pts, s, e, sqTol, kept) {
+    var maxSq = 0, idx = s;
+    for (var i = s + 1; i < e; i++) {
+      var sq = ptSegDistSq(pts[i], pts[s], pts[e]);
+      if (sq > maxSq) { maxSq = sq; idx = i; }
+    }
+    if (maxSq > sqTol) {
+      simplifyRange(pts, s,   idx, sqTol, kept);
+      kept.push(pts[idx]);
+      simplifyRange(pts, idx, e,   sqTol, kept);
+    }
+  }
+
+  var kept = [points[0]];
+  simplifyRange(points, 0, points.length - 1, tSq, kept);
+  kept.push(points[points.length - 1]);
+  return kept;
+};
+</script>

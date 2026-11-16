@@ -150,12 +150,23 @@ The `url` field of a waypoint is smart about media types:
 
 ### Waypoint icons
 
+Maps, Tracks and Travelpath draw from one icon set, defined in `geo-core-v1.html`. Any name below works anywhere an `icon:` field is accepted.
+
 | Category | Values |
-|----------|--------|
-| Generic | `pin`, `pin-small`, `star`, `heart`, `point`, `disc`, `bullseye`, `flag-checkered`, `camera`, `video`, `image`, `gallery`, `mountain`, `binoculars`, `landmark`, `utensils`, `droplet`, `microphone`, `triangle-exclamation` |
-| Circles | `circle-heart`, `circle-star`, `circle-camera`, `circle-video`, `circle-image`, `circle-gallery` |
-| Numbered | `circle-0` through `circle-9`; `circle-00` through `circle-99` |
-| Emoji | Any emoji character rendered as-is, e.g. `"⛺"`, `"📸"`, `"⚠️"` |
+|---|---|
+| Pins | `pin`, `pin-small` |
+| Plain shapes | `point` (12 px), `circle` (20 px, white stroke), `disc` (26 px), `bullseye` (hollow ring) |
+| Status badges | `check`, `x`, `dot`, `plus`, `minus` |
+| Favourites | `heart`, `star`, `star-half`, `star-empty` |
+| Media | `camera`, `video`, `image`, `gallery` |
+| Places | `mountain`, `binoculars`, `landmark`, `utensils`, `droplet`, `microphone`, `flag`, `warning` |
+| Endpoints | `start`, `finish` (Tracks places these automatically) |
+| Labels | `icon-new` |
+| Numbered | `icon-0` … `icon-9` (large single digit), `icon-00` … `icon-99` (small two digit) |
+| Font Awesome | any `fa-` prefixed name, e.g. `fa-utensils`, `fa-mug-hot` |
+| Emoji | any other value, rendered as-is, e.g. `"🏯"`, `"⛺"` |
+
+Badges are a white glyph inside a filled circle, coloured by the marker's `color` field. `fa-` icons render a coloured glyph on a transparent background instead; the Font Awesome stylesheet loads only on pages that use one.
 
 The icon inherits the waypoint's `color` field (or the track color as a fallback).
 
