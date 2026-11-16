@@ -99,7 +99,11 @@
   }
   .mb-track-legend-sep { color: #ccc; font-size: 8px; flex-shrink: 0; }
 
-  .mb-track-legend a {
+  /* Three selectors, and the extra class, so theme rules such as
+     ".post a:visited" cannot recolour legend links. */
+  .mb-track-legend .mb-track-legend-item a,
+  .mb-track-legend .mb-track-legend-item a:visited,
+  .mb-track-legend .mb-track-legend-item a:hover {
     color: #444;
     text-decoration: underline;
   }
@@ -121,7 +125,9 @@
     .mb-track-stat-sep,
     .mb-track-legend-sep    { color: #444; }
 
-    .mb-track-legend a { color: #7eb8f7; }
+    .mb-track-legend .mb-track-legend-item a,
+    .mb-track-legend .mb-track-legend-item a:visited,
+    .mb-track-legend .mb-track-legend-item a:hover { color: #7eb8f7; }
 
     /* Popup note text */
     .mb-track-popup-note { color: #bbb; }
