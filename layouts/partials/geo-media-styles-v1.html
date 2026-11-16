@@ -1,4 +1,79 @@
+{{/*
+  geo-media-styles-v1.html — shared overlay CSS
+  =============================================
+  Copied BYTE-IDENTICALLY into every sibling plugin's layouts/partials/.
+  Versioned in the file name for the same reason as geo-core-v1.html.
+
+  Styles the three shared DOM things: the lightbox overlay, the video
+  overlay, and the inline audio player. These classes stay UNPREFIXED:
+  they belong to the shared overlays, not to any one plugin.
+
+  Emitted once per page behind the "geoMediaCSS-v1" Scratch key.
+  No !important in this file.
+*/}}
+
 <style>
+  /* Lightbox overlay */
+  .map-lightbox {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 10000;
+    background: rgba(0,0,0,0.85);
+    cursor: pointer;
+    justify-content: center;
+    align-items: center;
+  }
+  .map-lightbox.active {
+    display: flex;
+  }
+  .map-lightbox img {
+    max-width: 85vw;
+    max-height: 85vh;
+    border-radius: 4px;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+    object-fit: contain;
+    cursor: default;
+  }
+  .map-lightbox-caption {
+    position: absolute;
+    bottom: 20px;
+    left: 0; right: 0;
+    text-align: center;
+    color: #ddd;
+    font-family: sans-serif;
+    font-size: 14px;
+    pointer-events: none;
+  }
+  .map-lightbox-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.8);
+    font-size: 36px;
+    cursor: pointer;
+    padding: 16px;
+    line-height: 1;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: color 0.15s;
+  }
+  .map-lightbox-arrow:hover {
+    color: #fff;
+  }
+  .map-lightbox-prev { left: 8px; }
+  .map-lightbox-next { right: 8px; }
+  .map-lightbox-counter {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    color: rgba(255,255,255,0.6);
+    font-family: sans-serif;
+    font-size: 14px;
+    pointer-events: none;
+  }
   /* Video player overlay */
   .map-video-overlay {
     display: none;
